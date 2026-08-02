@@ -1,0 +1,70 @@
+name: Android release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve release version
+        id: release
+        run: |
+          package_version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+          test -n "$package_version"
+          if test "$GITHUB_REF_TYPE" = 'tag'; then
+            test "${GITHUB_REF_NAME#v}" = "$package_version"
+          fi
+          printf 'version=%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+      - name: Verify source
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test example/lib example/test
+          flutter analyze
+          flutter test
+          cd example
+          flutter pub get
+          flutter test
+      - name: Build installable demo APK
+        working-directory: example
+        run: flutter build apk --release
+      - name: Prepare release assets
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp example/build/app/outputs/flutter-apk/app-release.apk "dist/Yotsuba-Gantt-Android-${RELEASE_VERSION}.apk"
+          cd dist
+          sha256sum "Yotsuba-Gantt-Android-${RELEASE_VERSION}.apk" > "Yotsuba-Gantt-Android-${RELEASE_VERSION}.apk.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: yotsuba-gantt-android-${{ steps.release.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          notes="doc/releases/v${RELEASE_VERSION}.md"
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "Yotsuba Gantt Flutter ${GITHUB_REF_NAME}" \
+            --notes-file "$notes"

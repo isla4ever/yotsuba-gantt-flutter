@@ -1,0 +1,28 @@
+name: yotsuba_gantt
+description: A lightweight, virtualized and highly customizable native Flutter Gantt chart with dependencies and dense-data focus.
+version: 0.1.0-alpha.0
+homepage: https://isla4ever.github.io/yotsuba-gantt/
+repository: https://github.com/isla4ever/yotsuba-gantt-flutter
+issue_tracker: https://github.com/isla4ever/yotsuba-gantt-flutter/issues
+topics:
+  - gantt
+  - timeline
+  - project-management
+  - planning
+  - virtualization
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
