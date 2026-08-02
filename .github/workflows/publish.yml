@@ -5,24 +5,36 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
-  publish:
+  check-version:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: pub.dev
+    permissions:
+      contents: read
+    outputs:
+      already-published: ${{ steps.package.outputs.already-published }}
     steps:
       - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Verify tag and package version
+      - name: Check package version
+        id: package
         run: |
           package_version="$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)"
+          test -n "$package_version"
           test "${GITHUB_REF_NAME#v}" = "$package_version"
-      - run: flutter pub get
-      - run: dart pub publish --force
+
+          if curl --fail --silent --show-error https://pub.dev/api/packages/yotsuba_gantt \
+            | jq --exit-status --arg version "$package_version" \
+              'any(.versions[]; .version == $version)' > /dev/null; then
+            echo "yotsuba_gantt $package_version is already available on pub.dev"
+            echo "already-published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already-published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: check-version
+    if: needs.check-version.outputs.already-published != 'true'
+    permissions:
+      id-token: write
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      environment: pub.dev

@@ -1,7 +1,7 @@
 name: yotsuba_gantt_example
 description: Yotsuba Gantt Flutter example.
 publish_to: none
-version: 0.1.0-alpha.0+1
+version: 0.1.0-alpha.1+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -9,8 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  yotsuba_gantt:
-    path: ../
+  # The demo intentionally consumes the released pub.dev package.
+  yotsuba_gantt: 0.1.0-alpha.1
 
 dev_dependencies:
   flutter_test:

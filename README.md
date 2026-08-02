@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-176e4c.svg" /></a>
 </p>
 
-原生 Flutter 甘特图组件：轻量、虚拟化、可交互，并为宿主应用保留完整 Builder 与控制器扩展面。不使用 WebView。
+这是 `yotsuba_gantt` 的 Flutter 包源码仓库，同时包含一个公开的 Android 演示应用。演示应用位于 [`example/`](example/)，故意通过 pub.dev 的 hosted dependency 接入已发布包，用来验证真实消费者体验；包本身是原生 Widget，不使用 WebView。
 
 - 原生 `ListView.builder` 行虚拟化，10,000 条任务示例可直接运行。
 - 六档时间维度、密集数据自动定位、任务拖动与时间吸附。
@@ -18,11 +18,24 @@
 - 多个图表可独立运行，也可通过 `YgGanttLinkGroup` 同步滚动和维度。
 - Task Bar、任务表、边界入口和入场动画均提供 Builder。
 
+## 演示应用与 Android APK
+
+```bash
+cd example
+flutter pub get
+flutter run
+```
+
+`example/pubspec.yaml` 精确安装 `yotsuba_gantt: 0.1.0-alpha.1`，不会通过本地 `path` 依赖掩盖 pub.dev 安装问题。发布工作流还会核对 APK 实际解析到的包版本，避免演示应用误打入旧包。每个 Flutter Release 都附带 APK 与 SHA-256 校验文件：
+
+- [下载最新 Android Release](https://github.com/isla4ever/yotsuba-gantt-flutter/releases)
+- [查看演示源码](example/)
+
 ## 安装
 
 ```yaml
 dependencies:
-  yotsuba_gantt: ^0.1.0-alpha.0
+  yotsuba_gantt: ^0.1.0-alpha.1
 ```
 
 ## 最小示例

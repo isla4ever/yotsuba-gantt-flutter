@@ -32,7 +32,25 @@ jobs:
             test "${GITHUB_REF_NAME#v}" = "$package_version"
           fi
           printf 'version=%s\n' "$package_version" >> "$GITHUB_OUTPUT"
+      - name: Wait for matching pub.dev package
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error https://pub.dev/api/packages/yotsuba_gantt \
+              | jq --exit-status --arg version "$RELEASE_VERSION" \
+                'any(.versions[]; .version == $version)' > /dev/null; then
+              echo "yotsuba_gantt $RELEASE_VERSION is available on pub.dev"
+              exit 0
+            fi
+            echo "Waiting for yotsuba_gantt $RELEASE_VERSION on pub.dev ($attempt/40)"
+            sleep 15
+          done
+          echo "Timed out waiting for yotsuba_gantt $RELEASE_VERSION on pub.dev" >&2
+          exit 1
       - name: Verify source
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           flutter pub get
           dart format --output=none --set-exit-if-changed lib test example/lib example/test
@@ -40,6 +58,8 @@ jobs:
           flutter test
           cd example
           flutter pub get
+          resolved_version="$(awk '/^  yotsuba_gantt:/{found=1; next} found && /^    version:/{gsub(/\"/, "", $2); print $2; exit}' pubspec.lock)"
+          test "$resolved_version" = "$RELEASE_VERSION"
           flutter test
       - name: Build installable demo APK
         working-directory: example

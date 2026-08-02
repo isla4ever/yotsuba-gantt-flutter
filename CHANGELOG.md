@@ -1,3 +1,9 @@
+## 0.1.0-alpha.1
+
+- 将 `example/` 切换为 pub.dev hosted dependency，验证真实消费者安装路径。
+- Android Release 从 hosted dependency 演示应用构建，并附带 APK 与 SHA-256 校验文件。
+- README 与 Release 说明补充演示仓库、安装和下载入口。
+
 ## 0.1.0-alpha.0
 
 - 首个 Flutter 原生 Alpha。
