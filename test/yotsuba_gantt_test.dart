@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yotsuba_gantt/yotsuba_gantt.dart';
 
@@ -138,6 +139,46 @@ void main() {
     await tester.pump();
     expect(linkedView, YgViewMode.day);
     expect(group.viewMode, YgViewMode.day);
+  });
+
+  testWidgets('two-finger scale changes one adjacent view mode',
+      (tester) async {
+    YgViewMode? changedView;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: YotsubaGantt(
+            tasks: <YgTask>[
+              YgTask(
+                id: 'touch',
+                title: '触控任务',
+                start: DateTime(2026, 8, 1),
+                end: DateTime(2026, 8, 10),
+              ),
+            ],
+            height: 320,
+            viewMode: YgViewMode.week,
+            autoFocus: YgAutoFocus.none,
+            onViewModeChanged: (view) => changedView = view,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(find.byType(YotsubaGantt));
+    final first = TestPointer(1, PointerDeviceKind.touch);
+    final second = TestPointer(2, PointerDeviceKind.touch);
+    final firstPosition = Offset(rect.right - 300, rect.center.dy);
+    final secondPosition = Offset(rect.right - 100, rect.center.dy);
+    await tester.sendEventToBinding(first.down(firstPosition));
+    await tester.sendEventToBinding(second.down(secondPosition));
+    await tester.sendEventToBinding(
+      second.move(secondPosition + const Offset(50, 0)),
+    );
+    await tester.pump();
+    expect(changedView, YgViewMode.day);
+    await tester.sendEventToBinding(first.cancel());
+    await tester.sendEventToBinding(second.cancel());
   });
 
   testWidgets('offscreen indicator builder receives a working jump action',

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:yotsuba_gantt/yotsuba_gantt.dart';
 
 void main() => runApp(const GanttExampleApp());
@@ -41,6 +44,7 @@ class _GanttExamplePageState extends State<GanttExamplePage> {
     end: DateTime(2026, 10, 10),
   );
   String? _selectedId;
+  var _landscapeLocked = false;
 
   static List<YgTask> _seedTasks() {
     const colors = <Color>[
@@ -137,6 +141,27 @@ class _GanttExamplePageState extends State<GanttExamplePage> {
     });
   }
 
+  Future<void> _setLandscape(bool enabled) async {
+    if (enabled) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      await SystemChrome.setPreferredOrientations(<DeviceOrientation>[]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    if (mounted) setState(() => _landscapeLocked = enabled);
+  }
+
+  @override
+  void dispose() {
+    unawaited(SystemChrome.setPreferredOrientations(<DeviceOrientation>[]));
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,117 +183,177 @@ class _GanttExamplePageState extends State<GanttExamplePage> {
             onPressed: _controller.fitToTasks,
             icon: const Icon(Icons.fit_screen_outlined),
           ),
+          IconButton(
+            tooltip: _landscapeLocked ? '退出横屏沉浸模式' : '进入横屏沉浸模式',
+            onPressed: () => _setLandscape(!_landscapeLocked),
+            icon: Icon(
+              _landscapeLocked
+                  ? Icons.fullscreen_exit_outlined
+                  : Icons.screen_rotation_outlined,
+            ),
+          ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                SegmentedButton<YgViewMode>(
-                  segments: YgViewMode.values
-                      .map(
-                        (mode) =>
-                            ButtonSegment(value: mode, label: Text(mode.label)),
-                      )
-                      .toList(),
-                  selected: <YgViewMode>{_viewMode},
-                  onSelectionChanged: (value) {
-                    setState(() => _viewMode = value.single);
-                  },
-                ),
-                Text(
-                  '${_range.start.month}/${_range.start.day} - ${_range.end.month}/${_range.end.day}',
-                ),
-                const Text('10,000 条任务 · 原生行虚拟化'),
-              ],
-            ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: _selectedId == null
-                  ? const SizedBox(height: 8)
-                  : Container(
-                      key: ValueKey<String>(_selectedId!),
-                      margin: const EdgeInsets.only(top: 10),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xffeaf6f0),
-                        border: Border.all(color: const Color(0xffb9dfcd)),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          const Icon(
-                            Icons.task_alt_outlined,
-                            size: 16,
-                            color: Color(0xff218c61),
+      body: OrientationBuilder(
+        builder: (context, orientation) => LayoutBuilder(
+          builder: (context, pageConstraints) {
+            final compact = pageConstraints.maxWidth < 720;
+            return Padding(
+              padding: EdgeInsets.all(compact ? 8 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      if (compact)
+                        SizedBox(
+                          width: 150,
+                          height: 48,
+                          child: DropdownButtonFormField<YgViewMode>(
+                            initialValue: _viewMode,
+                            decoration: const InputDecoration(
+                              labelText: '时间维度',
+                              border: OutlineInputBorder(),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                            items: YgViewMode.values
+                                .map(
+                                  (mode) => DropdownMenuItem<YgViewMode>(
+                                    value: mode,
+                                    child: Text(mode.label),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (mode) {
+                              if (mode != null) {
+                                setState(() => _viewMode = mode);
+                              }
+                            },
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _tasks
-                                  .firstWhere((task) => task.id == _selectedId)
-                                  .title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        )
+                      else
+                        SegmentedButton<YgViewMode>(
+                          segments: YgViewMode.values
+                              .map(
+                                (mode) => ButtonSegment<YgViewMode>(
+                                  value: mode,
+                                  label: Text(mode.label),
+                                ),
+                              )
+                              .toList(),
+                          selected: <YgViewMode>{_viewMode},
+                          onSelectionChanged: (value) {
+                            setState(() => _viewMode = value.single);
+                          },
+                        ),
+                      Text(
+                        '${_range.start.month}/${_range.start.day} - ${_range.end.month}/${_range.end.day}',
+                      ),
+                      Text(
+                        orientation == Orientation.landscape
+                            ? '10,000 条任务 · 原生行虚拟化 · 双指切换维度'
+                            : '10,000 条任务 · 原生行虚拟化',
+                      ),
+                    ],
+                  ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: _selectedId == null
+                        ? const SizedBox(height: 8)
+                        : Container(
+                            key: ValueKey<String>(_selectedId!),
+                            margin: const EdgeInsets.only(top: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xffeaf6f0),
+                              border:
+                                  Border.all(color: const Color(0xffb9dfcd)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                const Icon(
+                                  Icons.task_alt_outlined,
+                                  size: 16,
+                                  color: Color(0xff218c61),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _tasks
+                                        .firstWhere(
+                                          (task) => task.id == _selectedId,
+                                        )
+                                        .title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (!compact)
+                                  const Text(
+                                    '双击查看详情',
+                                    style: TextStyle(
+                                      color: Color(0xff64736b),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                          const Text(
-                            '双击查看详情',
-                            style: TextStyle(
-                              color: Color(0xff64736b),
-                              fontSize: 11,
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => YotsubaGantt(
+                        controller: _controller,
+                        tasks: _tasks,
+                        rangeStart: _range.start,
+                        rangeEnd: _range.end.add(const Duration(days: 1)),
+                        viewMode: _viewMode,
+                        onViewModeChanged: (mode) =>
+                            setState(() => _viewMode = mode),
+                        selectedTaskId: _selectedId,
+                        autoFocus: YgAutoFocus.dense,
+                        enableScaleGesture: true,
+                        sidebarWidth: compact ? 180 : 280,
+                        minSidebarWidth: compact ? 140 : 180,
+                        maxSidebarWidth: compact ? 300 : 480,
+                        height: constraints.maxHeight,
+                        onTaskTap: (task) =>
+                            setState(() => _selectedId = task.id),
+                        onTaskDoubleTap: (task) {
+                          showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(task.title),
+                              content: Text(
+                                '负责人：${task.owner ?? '未分配'}\n进度：${(task.progress * 100).round()}%',
+                              ),
+                              actions: <Widget>[
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('关闭'),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                          );
+                        },
+                        onTaskChanged: _applyTaskChange,
                       ),
                     ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) => YotsubaGantt(
-                  controller: _controller,
-                  tasks: _tasks,
-                  rangeStart: _range.start,
-                  rangeEnd: _range.end.add(const Duration(days: 1)),
-                  viewMode: _viewMode,
-                  onViewModeChanged: (mode) => setState(() => _viewMode = mode),
-                  selectedTaskId: _selectedId,
-                  autoFocus: YgAutoFocus.dense,
-                  height: constraints.maxHeight,
-                  onTaskTap: (task) => setState(() => _selectedId = task.id),
-                  onTaskDoubleTap: (task) {
-                    showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(task.title),
-                        content: Text(
-                          '负责人：${task.owner ?? '未分配'}\n进度：${(task.progress * 100).round()}%',
-                        ),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('关闭'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  onTaskChanged: _applyTaskChange,
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

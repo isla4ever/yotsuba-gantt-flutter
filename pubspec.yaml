@@ -1,6 +1,6 @@
 name: yotsuba_gantt
 description: A lightweight, virtualized and highly customizable native Flutter Gantt chart with dependencies and dense-data focus.
-version: 0.1.0-alpha.1
+version: 0.1.0-alpha.2
 homepage: https://isla4ever.github.io/yotsuba-gantt/
 repository: https://github.com/isla4ever/yotsuba-gantt-flutter
 issue_tracker: https://github.com/isla4ever/yotsuba-gantt-flutter/issues

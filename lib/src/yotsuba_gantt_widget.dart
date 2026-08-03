@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'controller.dart';
@@ -37,6 +38,9 @@ class YotsubaGantt extends StatefulWidget {
     this.selectedTaskId,
     this.entryTransition = YgEntryTransition.fadeSlide,
     this.entryDuration = const Duration(milliseconds: 180),
+    this.enableScaleGesture = true,
+    this.scaleGestureThreshold = 0.16,
+    this.scaleGestureCooldown = const Duration(milliseconds: 420),
     this.taskBarBuilder,
     this.rowHeaderBuilder,
     this.entryTransitionBuilder,
@@ -49,7 +53,9 @@ class YotsubaGantt extends StatefulWidget {
         assert(sidebarWidth > 0),
         assert(minSidebarWidth > 0),
         assert(maxSidebarWidth >= minSidebarWidth),
-        assert(sidebarResizeStep > 0);
+        assert(sidebarResizeStep > 0),
+        assert(scaleGestureThreshold >= 0.08),
+        assert(scaleGestureThreshold <= 0.5);
 
   /// Ordered task rows. Only visible rows are built.
   final List<YgTask> tasks;
@@ -123,6 +129,15 @@ class YotsubaGantt extends StatefulWidget {
   /// Viewport entry transition duration.
   final Duration entryDuration;
 
+  /// Enables two-finger timeline zoom without taking over one-finger scrolling.
+  final bool enableScaleGesture;
+
+  /// Scale ratio required before changing to an adjacent view mode.
+  final double scaleGestureThreshold;
+
+  /// Minimum interval between adjacent view-mode changes during one gesture.
+  final Duration scaleGestureCooldown;
+
   /// Replaces the built-in task bar interior.
   final YgTaskBarBuilder? taskBarBuilder;
 
@@ -164,6 +179,9 @@ class _YotsubaGanttState extends State<YotsubaGantt> {
   bool _applyingLinkedUpdate = false;
   double _timelineViewportWidth = 1;
   late Map<String, int> _taskIndexById;
+  final Map<int, Offset> _scalePointers = <int, Offset>{};
+  double _scaleStartDistance = 0;
+  DateTime _lastScaleChange = DateTime.fromMillisecondsSinceEpoch(0);
 
   YgGanttThemeData get _theme => widget.theme ?? YgGanttThemeData.light();
 
@@ -462,8 +480,53 @@ class _YotsubaGanttState extends State<YotsubaGantt> {
       widget.linkGroup?.publishView(_linkSource, mode);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollToDate(center, const Duration(milliseconds: 360));
+      if (!mounted) return;
+      if (widget.autoFocus == YgAutoFocus.none) {
+        _scrollToDate(center, const Duration(milliseconds: 360));
+      } else {
+        _applyAutoFocus();
+      }
     });
+  }
+
+  double _scalePointerDistance() {
+    if (_scalePointers.length < 2) return 0;
+    final pointers = _scalePointers.values.take(2).toList(growable: false);
+    return (pointers[0] - pointers[1]).distance;
+  }
+
+  void _handleScalePointerDown(PointerDownEvent event) {
+    if (!widget.enableScaleGesture || event.kind != PointerDeviceKind.touch) {
+      return;
+    }
+    _scalePointers[event.pointer] = event.localPosition;
+    if (_scalePointers.length == 2) {
+      _scaleStartDistance = _scalePointerDistance();
+    }
+  }
+
+  void _handleScalePointerMove(PointerMoveEvent event) {
+    if (!_scalePointers.containsKey(event.pointer)) return;
+    _scalePointers[event.pointer] = event.localPosition;
+    if (_scalePointers.length < 2 || _scaleStartDistance <= 0) return;
+    final scale = _scalePointerDistance() / _scaleStartDistance;
+    if ((scale - 1).abs() < widget.scaleGestureThreshold) return;
+    final now = DateTime.now();
+    if (now.difference(_lastScaleChange) < widget.scaleGestureCooldown) return;
+    final direction = scale > 1 ? 1 : -1;
+    final currentIndex = YgViewMode.values.indexOf(_viewMode);
+    final nextIndex = (currentIndex + direction).clamp(
+      0,
+      YgViewMode.values.length - 1,
+    );
+    _lastScaleChange = now;
+    _scaleStartDistance = _scalePointerDistance();
+    if (nextIndex != currentIndex) _setView(YgViewMode.values[nextIndex]);
+  }
+
+  void _handleScalePointerEnd(PointerEvent event) {
+    _scalePointers.remove(event.pointer);
+    if (_scalePointers.length < 2) _scaleStartDistance = 0;
   }
 
   Future<void> _fitToTasks() async {
@@ -647,68 +710,75 @@ class _YotsubaGanttState extends State<YotsubaGantt> {
           child: Center(child: Container(width: 1, color: theme.gridColor)),
         ),
         Expanded(
-          child: Stack(
-            children: <Widget>[
-              Scrollbar(
-                controller: _horizontal,
-                thumbVisibility: true,
-                notificationPredicate: (notification) =>
-                    notification.depth == 0,
-                child: SingleChildScrollView(
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: _handleScalePointerDown,
+            onPointerMove: _handleScalePointerMove,
+            onPointerUp: _handleScalePointerEnd,
+            onPointerCancel: _handleScalePointerEnd,
+            child: Stack(
+              children: <Widget>[
+                Scrollbar(
                   controller: _horizontal,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: _timelineWidth,
-                    child: ListView.builder(
-                      controller: _timelineVertical,
-                      itemExtent: _rowHeight,
-                      itemCount: widget.tasks.length,
-                      itemBuilder: (context, index) => _ViewportEntry(
-                        key: ValueKey<String>(
-                          'timeline-${widget.tasks[index].id}',
-                        ),
-                        transition: widget.entryTransition,
-                        duration: widget.entryDuration,
-                        builder: widget.entryTransitionBuilder,
-                        child: _buildTimelineRow(
-                          context,
-                          widget.tasks[index],
-                          index,
-                          theme,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (widget.showDependencies)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: Listenable.merge(<Listenable>[
-                        _horizontal,
-                        _timelineVertical,
-                      ]),
-                      builder: (context, child) => CustomPaint(
-                        painter: _DependencyPainter(
-                          tasks: widget.tasks,
-                          taskIndexById: _taskIndexById,
-                          start: _rangeStart,
-                          pixelsPerDay: _pixelsPerDay,
-                          horizontalOffset:
-                              _horizontal.hasClients ? _horizontal.offset : 0,
-                          verticalOffset: _timelineVertical.hasClients
-                              ? _timelineVertical.offset
-                              : 0,
-                          rowHeight: _rowHeight,
-                          viewportWidth: _timelineViewportWidth,
-                          theme: theme,
+                  thumbVisibility: true,
+                  notificationPredicate: (notification) =>
+                      notification.depth == 0,
+                  child: SingleChildScrollView(
+                    controller: _horizontal,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: _timelineWidth,
+                      child: ListView.builder(
+                        controller: _timelineVertical,
+                        itemExtent: _rowHeight,
+                        itemCount: widget.tasks.length,
+                        itemBuilder: (context, index) => _ViewportEntry(
+                          key: ValueKey<String>(
+                            'timeline-${widget.tasks[index].id}',
+                          ),
+                          transition: widget.entryTransition,
+                          duration: widget.entryDuration,
+                          builder: widget.entryTransitionBuilder,
+                          child: _buildTimelineRow(
+                            context,
+                            widget.tasks[index],
+                            index,
+                            theme,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-            ],
+                if (widget.showDependencies)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge(<Listenable>[
+                          _horizontal,
+                          _timelineVertical,
+                        ]),
+                        builder: (context, child) => CustomPaint(
+                          painter: _DependencyPainter(
+                            tasks: widget.tasks,
+                            taskIndexById: _taskIndexById,
+                            start: _rangeStart,
+                            pixelsPerDay: _pixelsPerDay,
+                            horizontalOffset:
+                                _horizontal.hasClients ? _horizontal.offset : 0,
+                            verticalOffset: _timelineVertical.hasClients
+                                ? _timelineVertical.offset
+                                : 0,
+                            rowHeight: _rowHeight,
+                            viewportWidth: _timelineViewportWidth,
+                            theme: theme,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],

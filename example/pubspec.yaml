@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   # The demo intentionally consumes the released pub.dev package.
-  yotsuba_gantt: 0.1.0-alpha.1
+  yotsuba_gantt: 0.1.0-alpha.2
 
 dev_dependencies:
   flutter_test:

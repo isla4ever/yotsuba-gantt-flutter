@@ -14,6 +14,7 @@
 
 - 原生 `ListView.builder` 行虚拟化，10,000 条任务示例可直接运行。
 - 六档时间维度、密集数据自动定位、任务拖动与时间吸附。
+- 双指分档切换时间维度，保留单指滚动与任务交互。
 - 任务依赖、进度层、里程碑、边界快速跳转与日期范围控制。
 - 多个图表可独立运行，也可通过 `YgGanttLinkGroup` 同步滚动和维度。
 - Task Bar、任务表、边界入口和入场动画均提供 Builder。
@@ -35,7 +36,7 @@ flutter run
 
 ```yaml
 dependencies:
-  yotsuba_gantt: ^0.1.0-alpha.1
+  yotsuba_gantt: ^0.1.0-alpha.2
 ```
 
 ## 最小示例
